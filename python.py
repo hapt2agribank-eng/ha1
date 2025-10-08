@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from google import genai
 from google.genai.errors import APIError
+from google.genai import types # Thêm import types
 
 # --- Cấu hình Trang Streamlit ---
 st.set_page_config(
@@ -76,9 +77,20 @@ Bạn là một chuyên gia phân tích tài chính chuyên nghiệp. Dựa trê
 Dữ liệu thô và chỉ số:
 {data_for_ai}
 """
+        # KHẮC PHỤC LỖI: SỬ DỤNG SystemInstruction trong config
+        system_instruction_analysis = (
+            "Bạn là một chuyên gia phân tích tài chính chuyên nghiệp. "
+            "Phân tích tập trung vào tốc độ tăng trưởng, thay đổi cơ cấu tài sản và khả năng thanh toán hiện hành."
+        )
+
+        config = types.GenerateContentConfig(
+            system_instruction=system_instruction_analysis
+        )
+        
         response = client.models.generate_content(
             model=model_name,
-            contents=prompt
+            contents=prompt,
+            config=config # Truyền config vào đây
         )
         return response.text
     except APIError as e:
@@ -96,11 +108,16 @@ def get_chat_response(prompt, processed_data_markdown, chat_history, api_key):
         model_name = 'gemini-2.5-flash' 
 
         # 1. System Instruction: Define persona and rules
-        system_instruction = (
+        system_instruction_chat = (
             "Bạn là Trợ lý Tài chính AI (FA-Gemini) chuyên nghiệp. Nhiệm vụ của bạn là trả lời các câu hỏi của người dùng "
             "dựa trên Dữ liệu Báo cáo Tài chính đã được xử lý và cung cấp dưới dạng Markdown. "
             "Hãy giữ giọng điệu chuyên nghiệp, chính xác và chỉ trả lời dựa trên dữ liệu hiện có trong bảng Markdown. "
             "KHÔNG TỰ Ý SÁNG TẠO DỮ LIỆU HOẶC CHỈ SỐ. Nếu thông tin không có, hãy nói rõ rằng bạn chỉ có thể phân tích dữ liệu đã cung cấp."
+        )
+        
+        # Tạo generation config cho System Instruction
+        generation_config = types.GenerateContentConfig(
+            system_instruction=system_instruction_chat
         )
         
         # 2. Chuẩn bị nội dung gửi đi (Lịch sử Chat + Prompt hiện tại với Context)
@@ -126,7 +143,7 @@ def get_chat_response(prompt, processed_data_markdown, chat_history, api_key):
         response = client.models.generate_content(
             model=model_name,
             contents=full_contents,
-            system_instruction=system_instruction
+            config=generation_config # Truyền config vào đây để khắc phục lỗi
         )
         return response.text
     except APIError as e:
@@ -268,7 +285,6 @@ with tab2:
         # Kiểm tra điều kiện cần thiết trước khi chat
         if not api_key:
             st.warning("Không có Khóa API Gemini, không thể trò chuyện.")
-            # st.stop() # Không nên dùng st.stop() trong chat input
         else:
             if st.session_state.df_markdown == "":
                 st.warning("Vui lòng tải lên và xử lý báo cáo tài chính ở tab 'PHÂN TÍCH TỰ ĐỘNG' trước khi hỏi đáp.")
