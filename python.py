@@ -21,6 +21,7 @@ if "df_markdown" not in st.session_state:
     st.session_state.df_markdown = "" # Lưu trữ dữ liệu đã xử lý dưới dạng Markdown để làm ngữ cảnh cho AI
 
 # Lấy API Key từ Streamlit Secrets
+# Lưu ý: Cần cấu hình key GEMINI_API_KEY trong file secrets.toml của Streamlit
 api_key = st.secrets.get("GEMINI_API_KEY")
 
 # --- Hàm tính toán chính (Sử dụng Caching để Tối ưu hiệu suất) ---
@@ -115,10 +116,7 @@ def get_chat_response(prompt, processed_data_markdown, chat_history, api_key):
         # Thêm prompt hiện tại của người dùng, gắn kèm ngữ cảnh dữ liệu
         user_prompt_with_context = f"Đây là Bảng Dữ liệu Tài chính đã được phân tích:\n{processed_data_markdown}\n\nCâu hỏi của tôi: {prompt}"
         
-        # Thay thế tin nhắn người dùng cuối cùng trong full_contents (vốn đã được thêm vào st.session_state)
-        # bằng tin nhắn có ngữ cảnh đầy đủ.
-        # Lưu ý: Cần đảm bảo logic thêm prompt người dùng vào history trước khi gọi hàm chat_response vẫn đúng. 
-        # Vì ta đang truyền st.session_state.chat_history (đã bao gồm prompt) nên ta chỉ cần sửa lại nội dung phần tử cuối.
+        # Cập nhật prompt cuối cùng của người dùng với ngữ cảnh dữ liệu
         if full_contents and full_contents[-1]["role"] == "user":
              full_contents[-1]["parts"][0]["text"] = user_prompt_with_context
         else:
@@ -149,7 +147,7 @@ with tab1:
 
     df_processed = None
     
-    # Reset df_markdown khi không có file hoặc file mới được tải
+    # Xử lý khi không có file được tải lên
     if uploaded_file is None:
         st.session_state.df_markdown = ""
         st.info("Vui lòng tải lên file Excel để bắt đầu phân tích.")
@@ -270,29 +268,29 @@ with tab2:
         # Kiểm tra điều kiện cần thiết trước khi chat
         if not api_key:
             st.warning("Không có Khóa API Gemini, không thể trò chuyện.")
-            continue
-
-        if st.session_state.df_markdown == "":
-            st.warning("Vui lòng tải lên và xử lý báo cáo tài chính ở tab 'PHÂN TÍCH TỰ ĐỘNG' trước khi hỏi đáp.")
+            # st.stop() # Không nên dùng st.stop() trong chat input
         else:
-            # 1. Thêm tin nhắn người dùng vào lịch sử
-            st.session_state.chat_history.append({"role": "user", "content": prompt})
-            with st.chat_message("user"):
-                st.markdown(prompt)
+            if st.session_state.df_markdown == "":
+                st.warning("Vui lòng tải lên và xử lý báo cáo tài chính ở tab 'PHÂN TÍCH TỰ ĐỘNG' trước khi hỏi đáp.")
+            else:
+                # 1. Thêm tin nhắn người dùng vào lịch sử
+                st.session_state.chat_history.append({"role": "user", "content": prompt})
+                with st.chat_message("user"):
+                    st.markdown(prompt)
 
-            # 2. Lấy phản hồi từ Gemini
-            with st.chat_message("assistant"):
-                with st.spinner("Đang chờ FA-Gemini trả lời..."):
-                    # Gọi hàm chat với ngữ cảnh dữ liệu và lịch sử chat
-                    response = get_chat_response(
-                        prompt, 
-                        st.session_state.df_markdown, 
-                        st.session_state.chat_history,
-                        api_key
-                    )
-                    st.markdown(response)
-                    # 3. Thêm phản hồi của AI vào lịch sử
-                    st.session_state.chat_history.append({"role": "assistant", "content": response})
+                # 2. Lấy phản hồi từ Gemini
+                with st.chat_message("assistant"):
+                    with st.spinner("Đang chờ FA-Gemini trả lời..."):
+                        # Gọi hàm chat với ngữ cảnh dữ liệu và lịch sử chat
+                        response = get_chat_response(
+                            prompt, 
+                            st.session_state.df_markdown, 
+                            st.session_state.chat_history,
+                            api_key
+                        )
+                        st.markdown(response)
+                        # 3. Thêm phản hồi của AI vào lịch sử
+                        st.session_state.chat_history.append({"role": "assistant", "content": response})
 
     if st.session_state.df_markdown != "":
         st.caption("Dữ liệu báo cáo đã xử lý đang được cung cấp cho AI để trả lời các câu hỏi chuyên sâu của bạn.")
